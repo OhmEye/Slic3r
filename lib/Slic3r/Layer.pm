@@ -106,7 +106,7 @@ sub make_surfaces {
     
     {
 #        my $safety_offset = scale 0.1;
-        my $safety_offset = scale 10000;
+        my $safety_offset = scale 1000;
         # merge everything
         my $expolygons = [ map $_->offset_ex(-$safety_offset), @{union_ex(safety_offset($loops, $safety_offset))} ];
         
