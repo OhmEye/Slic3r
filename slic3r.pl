@@ -88,9 +88,9 @@ if (@ARGV) {  # slicing from command line
     
     while (my $input_file = shift @ARGV) {
         my $print = Slic3r::Print->new(config => $config);
-        $print->add_objects_from_file($input_file);
+        $print->add_model(Slic3r::Model->read_from_file($input_file));
         if ($opt{merge}) {
-            $print->add_objects_from_file($_) for splice @ARGV, 0;
+            $print->add_model(Slic3r::Model->read_from_file($_)) for splice @ARGV, 0;
         }
         $print->duplicate;
         $print->arrange_objects if @{$print->objects} > 1;
@@ -164,6 +164,8 @@ $j
     --g0                Use G0 commands for retraction (experimental, not supported by all
                         firmwares)
     --gcode-comments    Make G-code verbose by adding comments (default: no)
+    --vibration-limit   Limit the frequency of moves on X and Y axes (Hz, set zero to disable;
+                        default: $config->{vibration_limit})
     
   Filament options:
     --filament-diameter Diameter in mm of your raw filament (default: $config->{filament_diameter}->[0])
@@ -192,7 +194,10 @@ $j
                         (default: $config->{solid_infill_speed})
     --top-solid-infill-speed Speed of print moves for top surfaces in mm/s or % over solid infill speed
                         (default: $config->{top_solid_infill_speed})
+    --support-material-speed
+                        Speed of support material print moves in mm/s (default: $config->{support_material_speed})
     --bridge-speed      Speed of bridge print moves in mm/s (default: $config->{bridge_speed})
+    --gap-fill-speed    Speed of gap fill print moves in mm/s (default: $config->{gap_fill_speed})
     --first-layer-speed Speed of print moves for bottom layer, expressed either as an absolute
                         value or as a percentage over normal speeds (default: $config->{first_layer_speed})
     
@@ -201,11 +206,14 @@ $j
     --first-layer-height Layer height for first layer (mm or %, default: $config->{first_layer_height})
     --infill-every-layers
                         Infill every N layers (default: $config->{infill_every_layers})
+    --solid-infill-every-layers
+                        Force a solid layer every N layers (default: $config->{solid_infill_every_layers})
   
   Print options:
     --perimeters        Number of perimeters/horizontal skins (range: 0+, default: $config->{perimeters})
-    --solid-layers      Number of solid layers to do for top/bottom surfaces
-                        (range: 1+, default: $config->{solid_layers})
+    --top-solid-layers  Number of solid layers to do for top surfaces (range: 0+, default: $config->{top_solid_layers})
+    --bottom-solid-layers  Number of solid layers to do for bottom surfaces (range: 0+, default: $config->{bottom_solid_layers})
+    --solid-layers      Shortcut for setting the two options above at once
     --fill-density      Infill density (range: 0-1, default: $config->{fill_density})
     --fill-angle        Infill angle in degrees (range: 0-90, default: $config->{fill_angle})
     --fill-pattern      Pattern to use to fill non-solid layers (default: $config->{fill_pattern})
@@ -272,6 +280,8 @@ $j
     --skirt-distance    Distance in mm between innermost skirt and object 
                         (default: $config->{skirt_distance})
     --skirt-height      Height of skirts to draw (expressed in layers, 0+, default: $config->{skirt_height})
+    --min-skirt-length  Generate no less than the number of loops required to consume this length
+                        of filament on the first layer, for each extruder (mm, 0+, default: $config->{min_skirt_length})
     --brim-width        Width of the brim that will get added to each object to help adhesion
                         (mm, default: $config->{brim_width})
    

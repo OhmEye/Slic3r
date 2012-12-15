@@ -2,8 +2,6 @@ package Slic3r::Format::AMF::Parser;
 use strict;
 use warnings;
 
-use XML::SAX::PurePerl;
-
 use base 'XML::SAX::Base';
 
 my %xyz_index = (x => 0, y => 1, z => 2); #=
@@ -37,10 +35,10 @@ sub start_element {
         $self->{_vertex_idx} = $1-1;
     } elsif ($data->{LocalName} eq 'material') {
         my $material_id = $self->_get_attribute($data, 'id') || '_';
-        $self->{_material} = $self->{_model}->materials->{ $material_id } = {};
+        $self->{_material} = $self->{_model}->set_material($material_id);
     } elsif ($data->{LocalName} eq 'metadata' && $self->{_tree}[-1] eq 'material') {
         $self->{_material_metadata_type} = $self->_get_attribute($data, 'type');
-        $self->{_material}{ $self->{_material_metadata_type} } = "";
+        $self->{_material}->attributes->{ $self->{_material_metadata_type} } = "";
     } elsif ($data->{LocalName} eq 'constellation') {
         $self->{_constellation} = 1; # we merge all constellations as we don't support more than one
     } elsif ($data->{LocalName} eq 'instance' && $self->{_constellation}) {
@@ -63,7 +61,7 @@ sub characters {
     } elsif ($self->{_triangle} && defined $self->{_vertex_idx}) {
         $self->{_triangle}[ $self->{_vertex_idx} ] .= $data->{Data};
     } elsif ($self->{_material_metadata_type}) {
-        $self->{_material}{ $self->{_material_metadata_type} } .= $data->{Data};
+        $self->{_material}->attributes->{ $self->{_material_metadata_type} } .= $data->{Data};
     } elsif ($self->{_instance_property}) {
         $self->{_instance}{ $self->{_instance_property} } .= $data->{Data};
     }
@@ -107,7 +105,7 @@ sub end_document {
     
     foreach my $object_id (keys %{ $self->{_instances} }) {
         my $new_object_id = $self->{_objects_map}{$object_id};
-        if (!$new_object_id) {
+        if (!defined $new_object_id) {
             warn "Undefined object $object_id referenced in constellation\n";
             next;
         }
@@ -115,7 +113,7 @@ sub end_document {
         foreach my $instance (@{ $self->{_instances}{$object_id} }) {
             $self->{_model}->objects->[$new_object_id]->add_instance(
                 rotation => $instance->{rz} || 0,
-                offset   => [ $instance->{deltax} || 0, $instance->{deltay} ],
+                offset   => [ $instance->{deltax} || 0, $instance->{deltay} || 0 ],
             );
         }
     }
