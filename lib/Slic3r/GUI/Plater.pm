@@ -316,7 +316,7 @@ sub object_loaded {
     
     $self->make_thumbnail($obj_idx);
     $self->arrange unless $params{no_arrange};
-    $self->{list}->Update;
+#    $self->{list}->Update;
     $self->{list}->Select($obj_idx, 1);
     $self->object_list_changed;
 }
