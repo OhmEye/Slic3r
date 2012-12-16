@@ -7,14 +7,17 @@ sub read_file {
     my $self = shift;
     my ($file) = @_;
     
-    eval "require Slic3r::Format::AMF::Parser; 1"
-        or die "AMF parsing requires XML::SAX\n";
+    eval qq{
+    	require Slic3r::Format::AMF::Parser;
+    	use XML::SAX::ParserFactory;
+    	1;
+    } or die "AMF parsing requires XML::SAX\n";
     
     open my $fh, '<', $file or die "Failed to open $file\n";
     
     my $model = Slic3r::Model->new;
-    XML::SAX::PurePerl
-        ->new(Handler => Slic3r::Format::AMF::Parser->new(_model => $model))
+    XML::SAX::ParserFactory
+        ->parser(Handler => Slic3r::Format::AMF::Parser->new(_model => $model))
         ->parse_file($fh);
     close $fh;
     
@@ -35,8 +38,8 @@ sub write_file {
     for my $material_id (sort keys %{ $model->materials }) {
         my $material = $model->materials->{$material_id};
         printf $fh qq{  <material id="%d">\n}, $material_id;
-        for (keys %$material) {
-             printf $fh qq{    <metadata type=\"%s\">%s</metadata>\n}, $_, $material->{$_};
+        for (keys %{$material->attributes}) {
+             printf $fh qq{    <metadata type=\"%s\">%s</metadata>\n}, $_, $material->attributes->{$_};
         }
         printf $fh qq{  </material>\n};
     }
@@ -72,7 +75,7 @@ sub write_file {
             foreach my $instance (@{$object->instances}) {
                 $instances .= sprintf qq{    <instance objectid="%d">\n}, $object_id;
                 $instances .= sprintf qq{      <deltax>%s</deltax>\n}, $instance->offset->[X];
-                $instances .= sprintf qq{      <deltax>%s</deltax>\n}, $instance->offset->[Y];
+                $instances .= sprintf qq{      <deltay>%s</deltay>\n}, $instance->offset->[Y];
                 $instances .= sprintf qq{      <rz>%s</rz>\n}, $instance->rotation;
                 $instances .= sprintf qq{    </instance>\n};
             }
