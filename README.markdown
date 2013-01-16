@@ -153,6 +153,17 @@ The author of the Silk icon set is Mark James.
         --first-layer-speed Speed of print moves for bottom layer, expressed either as an absolute
                             value or as a percentage over normal speeds (default: 30%)
         
+      Acceleration options:
+        --perimeter-acceleration
+                            Overrides firmware's default acceleration for perimeters. (mm/s^2, set zero
+                            to disable; default: 0)
+        --infill-acceleration
+                            Overrides firmware's default acceleration for infill. (mm/s^2, set zero
+                            to disable; default: 0)
+        --default-acceleration
+                            Acceleration will be reset to this value after the specific settings above
+                            have been applied. (mm/s^2, set zero to disable; default: 130)
+        
       Accuracy options:
         --layer-height      Layer height in mm (default: 0.4)
         --first-layer-height Layer height for first layer (mm or %, default: 100%)
@@ -176,6 +187,7 @@ The author of the Silk icon set is Mark James.
                             the default commands (turn off temperature [M104 S0],
                             home X axis [G28 X], disable motors [M84]).
         --layer-gcode       Load layer-change G-code from the supplied file (default: nothing).
+        --toolchange-gcode  Load tool-change G-code from the supplied file (default: nothing).
         --extra-perimeters  Add more perimeters when needed (default: yes)
         --randomize-start   Randomize starting point across layers (default: yes)
         --only-retract-when-crossing-perimeters
@@ -188,7 +200,8 @@ The author of the Silk icon set is Mark James.
        Support material options:
         --support-material  Generate support material for overhangs
         --support-material-threshold
-                            Overhang threshold angle (range: 0-90, default: 45)
+                            Overhang threshold angle (range: 0-90, set 0 for automatic detection,
+                            default: 0)
         --support-material-pattern
                             Pattern to use for support material (default: rectilinear)
         --support-material-spacing

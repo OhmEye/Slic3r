@@ -430,6 +430,10 @@ sub build {
             title => 'Modifiers',
             options => [qw(first_layer_speed)],
         },
+        {
+            title => 'Acceleration control (advanced)',
+            options => [qw(perimeter_acceleration infill_acceleration default_acceleration)],
+        },
     ]);
     
     $self->add_options_page('Skirt and brim', 'box.png', optgroups => [
@@ -655,6 +659,11 @@ sub build {
             title => 'Layer change G-code',
             no_labels => 1,
             options => [qw(layer_gcode)],
+        },
+        {
+            title => 'Tool change G-code',
+            no_labels => 1,
+            options => [qw(toolchange_gcode)],
         },
     ]);
     

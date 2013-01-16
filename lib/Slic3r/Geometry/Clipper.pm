@@ -14,14 +14,14 @@ our $clipper = Math::Clipper->new;
 
 sub safety_offset {
     my ($polygons, $factor) = @_;
-    return Math::Clipper::offset($polygons, $factor || (scale 1e-05), 100000, JT_MITER, 2);
+    return Math::Clipper::offset($polygons, $factor // (scale 1e-05), 100000, JT_MITER, 2);
 }
 
 sub offset {
     my ($polygons, $distance, $scale, $joinType, $miterLimit) = @_;
     $scale      ||= 100000;
     $joinType   //= JT_MITER;
-    $miterLimit //= 10;
+    $miterLimit //= 3;
     
     my $offsets = Math::Clipper::offset($polygons, $distance, $scale, $joinType, $miterLimit);
     return @$offsets;

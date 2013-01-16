@@ -6,7 +6,7 @@ use utf8;
 use List::Util qw(first);
 
 # cemetery of old config settings
-our @Ignore = qw(duplicate_x duplicate_y multiply_x multiply_y support_material_tool);
+our @Ignore = qw(duplicate_x duplicate_y multiply_x multiply_y support_material_tool acceleration);
 
 my $serialize_comma     = sub { join ',', @{$_[0]} };
 my $deserialize_comma   = sub { [ split /,/, $_[0] ] };
@@ -303,7 +303,7 @@ our $Options = {
     },
     'gap_fill_speed' => {
         label   => 'Gap fill',
-        tooltip => 'Speed for filling small gaps using short zigzag moves. Keep this reasonably low to avoid too much shaking and resonance issues.',
+        tooltip => 'Speed for filling small gaps using short zigzag moves. Keep this reasonably low to avoid too much shaking and resonance issues. Set zero to disable gaps filling.',
         sidetext => 'mm/s',
         cli     => 'gap-fill-speed=f',
         type    => 'f',
@@ -319,25 +319,29 @@ our $Options = {
     },
     
     # acceleration options
-    'acceleration' => {
-        label   => 'Enable acceleration control',
-        cli     => 'acceleration!',
-        type    => 'bool',
+    'default_acceleration' => {
+        label   => 'Default',
+        tooltip => 'This is the acceleration your printer will be reset to after the role-specific acceleration values are used (perimeter/infill). Set zero to prevent resetting acceleration at all.',
+        sidetext => 'mm/s²',
+        cli     => 'default-acceleration',
+        type    => 'f',
         default => 0,
     },
     'perimeter_acceleration' => {
         label   => 'Perimeters',
+        tooltip => 'This is the acceleration your printer will use for perimeters. A high value like 9000 usually gives good results if your hardware is up to the job. Set zero to disable acceleration control for perimeters.',
         sidetext => 'mm/s²',
         cli     => 'perimeter-acceleration',
         type    => 'f',
-        default => 25,
+        default => 0,
     },
     'infill_acceleration' => {
         label   => 'Infill',
+        tooltip => 'This is the acceleration your printer will use for infill. Set zero to disable acceleration control for infill.',
         sidetext => 'mm/s²',
         cli     => 'infill-acceleration',
         type    => 'f',
-        default => 50,
+        default => 0,
     },
     
     # accuracy options
@@ -536,11 +540,11 @@ our $Options = {
     },
     'support_material_threshold' => {
         label   => 'Overhang threshold',
-        tooltip => 'Support material will not generated for overhangs whose slope angle is above the given threshold.',
+        tooltip => 'Support material will not generated for overhangs whose slope angle is above the given threshold. Set to zero for automatic detection.',
         sidetext => '°',
         cli     => 'support-material-threshold=i',
         type    => 'i',
-        default => 45,
+        default => 0,
     },
     'support_material_pattern' => {
         label   => 'Pattern',
@@ -599,6 +603,18 @@ END
         label   => 'Layer change G-code',
         tooltip => 'This custom code is inserted at every layer change, right after the Z move and before the extruder moves to the first layer point. Note that you can use placeholder variables for all Slic3r settings.',
         cli     => 'layer-gcode=s',
+        type    => 's',
+        multiline => 1,
+        full_width => 1,
+        height  => 50,
+        serialize   => sub { join '\n', split /\R+/, $_[0] },
+        deserialize => sub { join "\n", split /\\n/, $_[0] },
+        default => '',
+    },
+    'toolchange_gcode' => {
+        label   => 'Tool change G-code',
+        tooltip => 'This custom code is inserted at every extruder change. Note that you can use placeholder variables for all Slic3r settings as well as [previous_extruder] and [next_extruder].',
+        cli     => 'toolchange-gcode=s',
         type    => 's',
         multiline => 1,
         full_width => 1,
@@ -925,12 +941,12 @@ sub new_from_cli {
     
     delete $args{$_} for grep !defined $args{$_}, keys %args;
     
-    for (qw(start end layer)) {
+    for (qw(start end layer toolchange)) {
         my $opt_key = "${_}_gcode";
         if ($args{$opt_key}) {
             die "Invalid value for --${_}-gcode: file does not exist\n"
                 if !-e $args{$opt_key};
-            open my $fh, "<", $args{$opt_key}
+            Slic3r::open(\my $fh, "<", $args{$opt_key})
                 or die "Failed to open $args{$opt_key}\n";
             binmode $fh, ':utf8';
             $args{$opt_key} = do { local $/; <$fh> };
@@ -1006,6 +1022,17 @@ sub set {
     }
     if ($opt_key eq 'threads' && !$Slic3r::have_threads) {
         $value = 1;
+    }
+    
+    # For historical reasons, the world's full of configs having these very low values;
+    # to avoid unexpected behavior we need to ignore them.  Banning these two hard-coded
+    # values is a dirty hack and will need to be removed sometime in the future, but it
+    # will avoid lots of complaints for now.
+    if ($opt_key eq 'perimeter_acceleration' && $value == '25') {
+        $value = 0;
+    }
+    if ($opt_key eq 'infill_acceleration' && $value == '50') {
+        $value = 0;
     }
     
     if (!exists $Options->{$opt_key}) {
@@ -1235,7 +1262,7 @@ sub write_ini {
     my $class = shift;
     my ($file, $ini) = @_;
     
-    open my $fh, '>', $file;
+    Slic3r::open(\my $fh, '>', $file);
     binmode $fh, ':utf8';
     my $localtime = localtime;
     printf $fh "# generated by Slic3r $Slic3r::VERSION on %s\n", "$localtime";
@@ -1253,7 +1280,7 @@ sub read_ini {
     my ($file) = @_;
     
     local $/ = "\n";
-    open my $fh, '<', $file;
+    Slic3r::open(\my $fh, '<', $file);
     binmode $fh, ':utf8';
     
     my $ini = { _ => {} };

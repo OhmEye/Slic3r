@@ -201,6 +201,17 @@ $j
     --first-layer-speed Speed of print moves for bottom layer, expressed either as an absolute
                         value or as a percentage over normal speeds (default: $config->{first_layer_speed})
     
+  Acceleration options:
+    --perimeter-acceleration
+                        Overrides firmware's default acceleration for perimeters. (mm/s^2, set zero
+                        to disable; default: $config->{perimeter_acceleration})
+    --infill-acceleration
+                        Overrides firmware's default acceleration for infill. (mm/s^2, set zero
+                        to disable; default: $config->{infill_acceleration})
+    --default-acceleration
+                        Acceleration will be reset to this value after the specific settings above
+                        have been applied. (mm/s^2, set zero to disable; default: $config->{travel_speed})
+    
   Accuracy options:
     --layer-height      Layer height in mm (default: $config->{layer_height})
     --first-layer-height Layer height for first layer (mm or %, default: $config->{first_layer_height})
@@ -224,6 +235,7 @@ $j
                         the default commands (turn off temperature [M104 S0],
                         home X axis [G28 X], disable motors [M84]).
     --layer-gcode       Load layer-change G-code from the supplied file (default: nothing).
+    --toolchange-gcode  Load tool-change G-code from the supplied file (default: nothing).
     --extra-perimeters  Add more perimeters when needed (default: yes)
     --randomize-start   Randomize starting point across layers (default: yes)
     --only-retract-when-crossing-perimeters
@@ -236,7 +248,8 @@ $j
    Support material options:
     --support-material  Generate support material for overhangs
     --support-material-threshold
-                        Overhang threshold angle (range: 0-90, default: $config->{support_material_threshold})
+                        Overhang threshold angle (range: 0-90, set 0 for automatic detection,
+                        default: $config->{support_material_threshold})
     --support-material-pattern
                         Pattern to use for support material (default: $config->{support_material_pattern})
     --support-material-spacing
