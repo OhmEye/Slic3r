@@ -404,6 +404,10 @@ sub build {
                 },
             ],
         },
+        {
+            title => 'Advanced',
+            options => [qw(avoid_crossing_perimeters)],
+        },
     ]);
     
     $self->add_options_page('Infill', 'shading.png', optgroups => [
@@ -413,7 +417,8 @@ sub build {
         },
         {
             title => 'Advanced',
-            options => [qw(infill_every_layers solid_infill_every_layers fill_angle solid_infill_below_area only_retract_when_crossing_perimeters)],
+            options => [qw(infill_every_layers infill_only_where_needed solid_infill_every_layers fill_angle
+                solid_infill_below_area only_retract_when_crossing_perimeters)],
         },
     ]);
     
@@ -450,7 +455,16 @@ sub build {
     $self->add_options_page('Support material', 'building.png', optgroups => [
         {
             title => 'Support material',
-            options => [qw(support_material support_material_threshold support_material_pattern support_material_spacing support_material_angle)],
+            options => [qw(support_material support_material_threshold support_material_enforce_layers)],
+        },
+        {
+            title => 'Raft',
+            options => [qw(raft_layers)],
+        },
+        {
+            title => 'Options for support material and raft',
+            options => [qw(support_material_pattern support_material_spacing support_material_angle
+                support_material_interface_layers support_material_interface_spacing)],
         },
     ]);
     

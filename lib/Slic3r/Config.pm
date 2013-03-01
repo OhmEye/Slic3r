@@ -64,8 +64,8 @@ our $Options = {
         tooltip => 'Some G/M-code commands, including temperature control and others, are not universal. Set this option to your printer\'s firmware to get a compatible output. The "No extrusion" flavor prevents Slic3r from exporting any extrusion value at all.',
         cli     => 'gcode-flavor=s',
         type    => 'select',
-        values  => [qw(reprap teacup makerbot mach3 no-extrusion)],
-        labels  => ['RepRap (Marlin/Sprinter)', 'Teacup', 'MakerBot', 'Mach3/EMC', 'No extrusion'],
+        values  => [qw(reprap teacup makerbot sailfish mach3 no-extrusion)],
+        labels  => ['RepRap (Marlin/Sprinter)', 'Teacup', 'MakerBot', 'Sailfish', 'Mach3/EMC', 'No extrusion'],
         default => 'reprap',
     },
     'use_relative_e_distances' => {
@@ -158,7 +158,7 @@ our $Options = {
         sidetext => '°C',
         cli     => 'temperature=i@',
         type    => 'i',
-        max     => 300,
+        max     => 400,
         serialize   => $serialize_comma,
         deserialize => sub { $_[0] ? [ split /,/, $_[0] ] : [0] },
         default => [200],
@@ -171,7 +171,7 @@ our $Options = {
         type    => 'i',
         serialize   => $serialize_comma,
         deserialize => sub { $_[0] ? [ split /,/, $_[0] ] : [0] },
-        max     => 300,
+        max     => 400,
         default => [200],
     },
     
@@ -254,7 +254,7 @@ our $Options = {
         cli     => 'external-perimeter-speed=s',
         type    => 'f',
         ratio_over => 'perimeter_speed',
-        default => '100%',
+        default => '70%',
     },
     'infill_speed' => {
         label   => 'Infill',
@@ -378,6 +378,13 @@ our $Options = {
         cli     => 'solid-infill-every-layers=i',
         type    => 'i',
         min     => 0,
+        default => 0,
+    },
+    'infill_only_where_needed' => {
+        label   => 'Only infill where needed',
+        tooltip => 'This option will limit infill to the areas actually needed for supporting ceilings (it will act as internal support material).',
+        cli     => 'infill-only-where-needed!',
+        type    => 'bool',
         default => 0,
     },
     
@@ -522,7 +529,14 @@ our $Options = {
         tooltip => 'Start each layer from a different vertex to prevent plastic build-up on the same corner.',
         cli     => 'randomize-start!',
         type    => 'bool',
-        default => 1,
+        default => 0,
+    },
+    'avoid_crossing_perimeters' => {
+        label   => 'Avoid crossing perimeters',
+        tooltip => 'Optimize travel moves in order to minimize the crossing of perimeters. This is mostly useful with Bowden extruders which suffer from oozing. This feature slows down both the print and the G-code generation.',
+        cli     => 'avoid-crossing-perimeters!',
+        type    => 'bool',
+        default => 0,
     },
     'only_retract_when_crossing_perimeters' => {
         label   => 'Only retract when crossing perimeters',
@@ -551,8 +565,8 @@ our $Options = {
         tooltip => 'Pattern used to generate support material.',
         cli     => 'support-material-pattern=s',
         type    => 'select',
-        values  => [qw(rectilinear honeycomb)],
-        labels  => [qw(rectilinear honeycomb)],
+        values  => [qw(rectilinear rectilinear-grid honeycomb)],
+        labels  => ['rectilinear', 'rectilinear grid', 'honeycomb'],
         default => 'rectilinear',
     },
     'support_material_spacing' => {
@@ -568,6 +582,38 @@ our $Options = {
         tooltip => 'Use this setting to rotate the support material pattern on the horizontal plane.',
         sidetext => '°',
         cli     => 'support-material-angle=i',
+        type    => 'i',
+        default => 0,
+    },
+    'support_material_interface_layers' => {
+        label   => 'Interface layers',
+        tooltip => 'Number of interface layers to insert between the object(s) and support material.',
+        sidetext => 'layers',
+        cli     => 'support-material-interface-layers=i',
+        type    => 'i',
+        default => 0,
+    },
+    'support_material_interface_spacing' => {
+        label   => 'Interface pattern spacing',
+        tooltip => 'Spacing between interface lines. Set zero to get a solid interface.',
+        sidetext => 'mm',
+        cli     => 'support-material-interface-spacing=f',
+        type    => 'f',
+        default => 0,
+    },
+    'support_material_enforce_layers' => {
+        label   => 'Enforce support for the first',
+        tooltip => 'Generate support material for the specified number of layers counting from bottom, regardless of whether normal support material is enabled or not and regardless of any angle threshold. This is useful for getting more adhesion of objects having a very thin or poor footprint on the build plate.',
+        sidetext => 'layers',
+        cli     => 'support-material-enforce-layers=f',
+        type    => 'i',
+        default => 0,
+    },
+    'raft_layers' => {
+        label   => 'Raft layers',
+        tooltip => 'Number of total raft layers to insert below the object(s).',
+        sidetext => 'layers',
+        cli     => 'raft-layers=i',
         type    => 'i',
         default => 0,
     },
@@ -696,7 +742,7 @@ END
         type    => 'f',
         serialize   => $serialize_comma,
         deserialize => $deserialize_comma,
-        default => [3],
+        default => [10],
     },
     'retract_restart_extra_toolchange' => {
         label   => 'Extra length on restart',
@@ -715,7 +761,7 @@ END
         tooltip => 'This flag enables all the cooling features.',
         cli     => 'cooling!',
         type    => 'bool',
-        default => 0,
+        default => 1,
     },
     'min_fan_speed' => {
         label   => 'Min',
@@ -762,7 +808,7 @@ END
         type    => 'i',
         max     => 1000,
         width   => 60,
-        default => 15,
+        default => 30,
     },
     'min_print_speed' => {
         label   => 'Min print speed',
@@ -1167,9 +1213,6 @@ sub validate {
     # --infill-every-layers
     die "Invalid value for --infill-every-layers\n"
         if $self->infill_every_layers !~ /^\d+$/ || $self->infill_every_layers < 1;
-    # TODO: this check should be limited to the extruder used for infill
-    die "Maximum infill thickness can't exceed nozzle diameter\n"
-        if grep $self->infill_every_layers * $self->layer_height > $_, @{$self->nozzle_diameter};
     
     # --scale
     die "Invalid value for --scale\n"
