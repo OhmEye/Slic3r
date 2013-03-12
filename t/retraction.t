@@ -43,6 +43,7 @@ my $test = sub {
             if (_eq($info->{dist_Z}, $print->extruders->[$tool]->retract_lift)
                 || (_eq($info->{dist_Z}, $conf->layer_height + $print->extruders->[$tool]->retract_lift) && $print->extruders->[$tool]->retract_lift > 0)) {
                 fail 'only lifting while retracted' if !$retracted[$tool] && !($conf->g0 && $info->{retracting});
+                fail 'double lift' if $lifted;
                 $lifted = 1;
             }
             if ($info->{dist_Z} < 0) {
@@ -87,8 +88,10 @@ my $test = sub {
     1;
 };
 
+$config->set('start_gcode',             '');  # to avoid dealing with the nozzle lift in start G-code
 $config->set('retract_length',          [1.5]);
 $config->set('retract_before_travel',   [3]);
+$config->set('only_retract_when_crossing_perimeters', 0);
 
 my $retract_tests = sub {
     my ($descr) = @_;

@@ -35,6 +35,9 @@ sub pack {
     return $o;
 }
 
+# no-op
+sub unpack { $_[0] }
+
 sub split_at_index {
     my $self = shift;
     
@@ -58,6 +61,11 @@ sub split_at {
 sub split_at_first_point {
     my $self = shift;
     return $self->split_at_index(0);
+}
+
+sub first_point {
+    my $self = shift;
+    return $self->polygon->[0];
 }
 
 package Slic3r::ExtrusionLoop::Packed;

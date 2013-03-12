@@ -7,8 +7,11 @@ use FindBin;
 use Slic3r::GUI::AboutDialog;
 use Slic3r::GUI::ConfigWizard;
 use Slic3r::GUI::Plater;
+use Slic3r::GUI::Plater::ObjectDialog;
+use Slic3r::GUI::Preferences;
 use Slic3r::GUI::OptionsGroup;
 use Slic3r::GUI::SkeinPanel;
+use Slic3r::GUI::SimpleTab;
 use Slic3r::GUI::Tab;
 
 use Wx 0.9901 qw(:bitmap :dialog :frame :icon :id :misc :systemsettings :toplevelwindow);
@@ -37,7 +40,14 @@ use constant MI_WEBSITE       => &Wx::NewId;
 use constant MI_DOCUMENTATION => &Wx::NewId;
 
 our $datadir;
-our $Settings;
+our $no_plater;
+our $mode;
+
+our $Settings = {
+    _ => {
+        mode => 'simple',
+    },
+};
 
 our $small_font = Wx::SystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
 $small_font->SetPointSize(11) if !&Wx::wxMSW;
@@ -66,13 +76,17 @@ sub OnInit {
     if (-f "$encoded_datadir/slic3r.ini") {
         my $ini = eval { Slic3r::Config->read_ini("$datadir/slic3r.ini") };
         $Settings = $ini if $ini;
+        $Settings->{_}{mode} ||= 'expert';
     }
     
     # application frame
     Wx::Image::AddHandler(Wx::PNGHandler->new);
     my $frame = Wx::Frame->new(undef, -1, 'Slic3r', wxDefaultPosition, [760, 470], wxDEFAULT_FRAME_STYLE);
     $frame->SetIcon(Wx::Icon->new("$Slic3r::var/Slic3r_128px.png", wxBITMAP_TYPE_PNG) );
-    $self->{skeinpanel} = Slic3r::GUI::SkeinPanel->new($frame);
+    $self->{skeinpanel} = Slic3r::GUI::SkeinPanel->new($frame,
+        mode        => $mode // $Settings->{_}{mode},
+        no_plater   => $no_plater,
+    );
     $self->SetTopWindow($frame);
     
     # status bar
@@ -95,6 +109,8 @@ sub OnInit {
         $fileMenu->AppendSeparator();
         $fileMenu->Append(MI_COMBINE_STLS, "Combine multi-material STL files…", 'Combine multiple STL files into a single multi-material AMF file');
         $fileMenu->AppendSeparator();
+        $fileMenu->Append(wxID_PREFERENCES, "Preferences…", 'Application preferences');
+        $fileMenu->AppendSeparator();
         $fileMenu->Append(wxID_EXIT, "&Quit", 'Quit Slic3r');
         EVT_MENU($frame, MI_LOAD_CONF, sub { $self->{skeinpanel}->load_config_file });
         EVT_MENU($frame, MI_EXPORT_CONF, sub { $self->{skeinpanel}->export_config });
@@ -105,6 +121,7 @@ sub OnInit {
                                                  $repeat->Enable(defined $Slic3r::GUI::SkeinPanel::last_input_file) });
         EVT_MENU($frame, MI_SLICE_SVG, sub { $self->{skeinpanel}->do_slice(save_as => 1, export_svg => 1) });
         EVT_MENU($frame, MI_COMBINE_STLS, sub { $self->{skeinpanel}->combine_stls });
+        EVT_MENU($frame, wxID_PREFERENCES, sub { Slic3r::GUI::Preferences->new($frame)->ShowModal });
         EVT_MENU($frame, wxID_EXIT, sub {$_[0]->Close(0)});
     }
     

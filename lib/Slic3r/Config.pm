@@ -323,7 +323,7 @@ our $Options = {
         label   => 'Default',
         tooltip => 'This is the acceleration your printer will be reset to after the role-specific acceleration values are used (perimeter/infill). Set zero to prevent resetting acceleration at all.',
         sidetext => 'mm/s²',
-        cli     => 'default-acceleration',
+        cli     => 'default-acceleration=f',
         type    => 'f',
         default => 0,
     },
@@ -331,7 +331,7 @@ our $Options = {
         label   => 'Perimeters',
         tooltip => 'This is the acceleration your printer will use for perimeters. A high value like 9000 usually gives good results if your hardware is up to the job. Set zero to disable acceleration control for perimeters.',
         sidetext => 'mm/s²',
-        cli     => 'perimeter-acceleration',
+        cli     => 'perimeter-acceleration=f',
         type    => 'f',
         default => 0,
     },
@@ -339,7 +339,15 @@ our $Options = {
         label   => 'Infill',
         tooltip => 'This is the acceleration your printer will use for infill. Set zero to disable acceleration control for infill.',
         sidetext => 'mm/s²',
-        cli     => 'infill-acceleration',
+        cli     => 'infill-acceleration=f',
+        type    => 'f',
+        default => 0,
+    },
+    'bridge_acceleration' => {
+        label   => 'Bridge',
+        tooltip => 'This is the acceleration your printer will use for bridges. Set zero to disable acceleration control for bridges.',
+        sidetext => 'mm/s²',
+        cli     => 'bridge-acceleration=f',
         type    => 'f',
         default => 0,
     },
@@ -387,6 +395,13 @@ our $Options = {
         type    => 'bool',
         default => 0,
     },
+    'infill_first' => {
+        label   => 'Infill before perimeters',
+        tooltip => 'This option will switch the print order of perimeters and infill, making the latter first.',
+        cli     => 'infill-first!',
+        type    => 'bool',
+        default => 0,
+    },
     
     # flow options
     'extrusion_width' => {
@@ -419,6 +434,14 @@ our $Options = {
         tooltip => 'Set this to a non-zero value to set a manual extrusion width for infill. You may want to use fatter extrudates to speed up the infill and make your parts stronger. If expressed as percentage (for example 90%) if will be computed over layer height.',
         sidetext => 'mm or % (leave 0 for default)',
         cli     => 'infill-extrusion-width=s',
+        type    => 'f',
+        default => 0,
+    },
+    'top_infill_extrusion_width' => {
+        label   => 'Top infill',
+        tooltip => 'Set this to a non-zero value to set a manual extrusion width for infill for top surfaces. You may want to use thinner extrudates to fill all narrow regions and get a smoother finish. If expressed as percentage (for example 90%) if will be computed over layer height.',
+        sidetext => 'mm or % (leave 0 for default)',
+        cli     => 'top-infill-extrusion-width=s',
         type    => 'f',
         default => 0,
     },
@@ -520,6 +543,7 @@ our $Options = {
     },
     'extra_perimeters' => {
         label   => 'Generate extra perimeters when needed',
+        tooltip => 'Add more perimeters when needed for avoiding gaps in sloping walls.',
         cli     => 'extra-perimeters!',
         type    => 'bool',
         default => 1,
@@ -543,7 +567,7 @@ our $Options = {
         tooltip => 'Disables retraction when travelling between infill paths inside the same island.',
         cli     => 'only-retract-when-crossing-perimeters!',
         type    => 'bool',
-        default => 0,
+        default => 1,
     },
     'support_material' => {
         label   => 'Generate support material',
@@ -627,7 +651,10 @@ our $Options = {
         height  => 120,
         serialize   => sub { join '\n', split /\R+/, $_[0] },
         deserialize => sub { join "\n", split /\\n/, $_[0] },
-        default => 'G28 ; home all axes',
+        default => <<'END',
+G28 ; home all axes
+G1 Z5 F5000 ; lift nozzle
+END
     },
     'end_gcode' => {
         label   => 'End G-code',
@@ -733,6 +760,15 @@ END
         serialize   => $serialize_comma,
         deserialize => $deserialize_comma,
         default => [0],
+    },
+    'retract_layer_change' => {
+        label   => 'Retract on layer change',
+        tooltip => 'This flag enforces a retraction whenever a Z move is done.',
+        cli     => 'retract-layer-change!',
+        type    => 'bool',
+        serialize   => $serialize_comma,
+        deserialize => $deserialize_comma,
+        default => [1],
     },
     'retract_length_toolchange' => {
         label   => 'Length',
@@ -1001,7 +1037,7 @@ sub new_from_cli {
     }
     
     $args{$_} = $Options->{$_}{deserialize}->($args{$_})
-        for grep exists $args{$_}, qw(print_center bed_size duplicate_grid extruder_offset);
+        for grep exists $args{$_}, qw(print_center bed_size duplicate_grid extruder_offset retract_layer_change);
     
     return $class->new(%args);
 }

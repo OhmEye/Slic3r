@@ -52,8 +52,17 @@ sub make_fill {
     
     Slic3r::debugf "Filling layer %d:\n", $layerm->id;
     
-    # merge overlapping surfaces
     my @surfaces = ();
+    
+    # if hollow object is requested, remove internal surfaces
+    # (this needs to be done after internal-solid shells are created)
+    if ($Slic3r::Config->fill_density == 0) {
+        @surfaces = grep $_->surface_type != S_TYPE_INTERNAL, @surfaces;
+    }
+    
+    # merge adjacent surfaces
+    # in case of bridge surfaces, the ones with defined angle will be attached to the ones
+    # without any angle (shouldn't this logic be moved to process_external_surfaces()?)
     {
         my @surfaces_with_bridge_angle = grep defined $_->bridge_angle, @{$layerm->fill_surfaces};
         
@@ -89,35 +98,10 @@ sub make_fill {
         }
     }
     
-    # add spacing between adjacent surfaces
+    # add spacing between surfaces
     {
         my $distance = $layerm->infill_flow->scaled_spacing / 2;
-        my @offsets = ();
-        foreach my $surface (@surfaces) {
-            my $expolygon = $surface->expolygon;
-            my $diff = diff_ex(
-                [ $expolygon->offset($distance) ],
-                $expolygon,
-                1,
-            );
-            push @offsets, map @$_, @$diff;
-        }
-        
-        my @new_surfaces = ();
-        foreach my $surface (@surfaces) {
-            my $diff = diff_ex(
-                $surface->expolygon,
-                [ @offsets ],
-            );
-            
-            push @new_surfaces, map Slic3r::Surface->new(
-                expolygon => $_,
-                surface_type => $surface->surface_type,
-                bridge_angle => $surface->bridge_angle,
-                depth_layers => $surface->depth_layers,
-            ), @$diff;
-        }
-        @surfaces = @new_surfaces;
+        @surfaces = map $_->offset(-$distance), @surfaces;
     }
     
     my @fills = ();
@@ -125,7 +109,9 @@ sub make_fill {
     SURFACE: foreach my $surface (@surfaces) {
         my $filler          = $Slic3r::Config->fill_pattern;
         my $density         = $Slic3r::Config->fill_density;
-        my $flow_spacing    = $layerm->infill_flow->spacing;
+        my $flow_spacing    = ($surface->surface_type == S_TYPE_TOP)
+            ? $layerm->top_infill_flow->spacing
+            : $layerm->infill_flow->spacing;
         my $is_bridge       = $layerm->id > 0 && $surface->is_bridge;
         my $is_solid        = $surface->is_solid;
         
@@ -134,7 +120,9 @@ sub make_fill {
             $density = 1;
             $filler = $Slic3r::Config->solid_fill_pattern;
             if ($is_bridge) {
-                $filler = 'rectilinear';
+                $filler = $surface->surface_type == S_TYPE_INTERNALBRIDGE
+                    ? 'concentric'
+                    : 'rectilinear';
                 $flow_spacing = $layerm->extruders->{infill}->bridge_flow->spacing;
             } elsif ($surface->surface_type == S_TYPE_INTERNALSOLID) {
                 $filler = 'rectilinear';

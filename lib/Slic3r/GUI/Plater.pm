@@ -210,32 +210,34 @@ sub new {
         $hsizer->Add($self->{canvas}, 0, wxALL, 10);
         $hsizer->Add($vertical_sizer, 1, wxEXPAND | wxALL, 10);
         
-        my $presets = Wx::BoxSizer->new(wxHORIZONTAL);
-        $presets->AddStretchSpacer(1);
-        my %group_labels = (
-            print       => 'Print settings',
-            filament    => 'Filament',
-            printer     => 'Printer',
-        );
-        $self->{preset_choosers} = {};
-        $self->{preset_choosers_sizers} = {};
-        for my $group (qw(print filament printer)) {
-            my $text = Wx::StaticText->new($self, -1, "$group_labels{$group}:", wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
-            my $choice = Wx::Choice->new($self, -1, wxDefaultPosition, [150, -1], []);
-            $self->{preset_choosers}{$group} = [$choice];
-            EVT_CHOICE($choice, $choice, sub { $self->on_select_preset($group, @_) });
-            
-            $self->{preset_choosers_sizers}{$group} = Wx::BoxSizer->new(wxVERTICAL);
-            $self->{preset_choosers_sizers}{$group}->Add($choice, 0, wxEXPAND | wxBOTTOM, FILAMENT_CHOOSERS_SPACING);
-            
-            $presets->Add($text, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-            $presets->Add($self->{preset_choosers_sizers}{$group}, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 15);
-        }
-        $presets->AddStretchSpacer(1);
-        
         my $sizer = Wx::BoxSizer->new(wxVERTICAL);
         $sizer->Add($hsizer, 1, wxEXPAND | wxBOTTOM, 10);
-        $sizer->Add($presets, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        
+        if ($self->skeinpanel->{mode} eq 'expert') {
+            my $presets = Wx::BoxSizer->new(wxHORIZONTAL);
+            $presets->AddStretchSpacer(1);
+            my %group_labels = (
+                print       => 'Print settings',
+                filament    => 'Filament',
+                printer     => 'Printer',
+            );
+            $self->{preset_choosers} = {};
+            $self->{preset_choosers_sizers} = {};
+            for my $group (qw(print filament printer)) {
+                my $text = Wx::StaticText->new($self, -1, "$group_labels{$group}:", wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
+                my $choice = Wx::Choice->new($self, -1, wxDefaultPosition, [150, -1], []);
+                $self->{preset_choosers}{$group} = [$choice];
+                EVT_CHOICE($choice, $choice, sub { $self->on_select_preset($group, @_) });
+                
+                $self->{preset_choosers_sizers}{$group} = Wx::BoxSizer->new(wxVERTICAL);
+                $self->{preset_choosers_sizers}{$group}->Add($choice, 0, wxEXPAND | wxBOTTOM, FILAMENT_CHOOSERS_SPACING);
+                
+                $presets->Add($text, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+                $presets->Add($self->{preset_choosers_sizers}{$group}, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 15);
+            }
+            $presets->AddStretchSpacer(1);
+            $sizer->Add($presets, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+        }
         
         $sizer->SetSizeHints($self);
         $self->SetSizer($sizer);
@@ -581,11 +583,15 @@ sub export_gcode {
 sub _init_print {
     my $self = shift;
     
+    my %extra_variables = ();
+    if ($self->skeinpanel->{mode} eq 'expert') {
+        $extra_variables{"${_}_preset"} = $self->skeinpanel->{options_tabs}{$_}->current_preset->{name}
+            for qw(print filament printer);
+    }
+    
     return Slic3r::Print->new(
         config => $self->skeinpanel->config,
-        extra_variables => {
-            map { +"${_}_preset" => $self->skeinpanel->{options_tabs}{$_}->current_preset->{name} } qw(print filament printer),
-        },
+        extra_variables => { %extra_variables },
     );
 }
 
@@ -702,6 +708,7 @@ sub make_model {
         my $new_model_object = $model->add_object(
             vertices    => $model_object->vertices,
             input_file  => $plater_object->input_file,
+            layer_height_ranges => $plater_object->layer_height_ranges,
         );
         foreach my $volume (@{$model_object->volumes}) {
             $new_model_object->add_volume(
@@ -969,7 +976,7 @@ sub list_item_activated {
     my ($self, $event, $obj_idx) = @_;
     
     $obj_idx //= $event->GetIndex;
-	my $dlg = Slic3r::GUI::Plater::ObjectInfoDialog->new($self,
+	my $dlg = Slic3r::GUI::Plater::ObjectDialog->new($self,
 		object => $self->{objects}[$obj_idx],
 	);
 	$dlg->ShowModal;
@@ -1067,6 +1074,7 @@ has 'rotate'                => (is => 'rw', default => sub { 0 });
 has 'instances'             => (is => 'rw', default => sub { [] }); # upward Y axis
 has 'thumbnail'             => (is => 'rw');
 has 'thumbnail_scaling_factor' => (is => 'rw');
+has 'layer_height_ranges'   => (is => 'rw', default => sub { [] }); # [ z_min, z_max, layer_height ]
 
 # statistics
 has 'facets'                => (is => 'rw');
@@ -1103,9 +1111,12 @@ sub free_model_object {
 sub get_model_object {
     my $self = shift;
     
-    return $self->model_object if $self->model_object;
-    my $model = Slic3r::Model->read_from_file($self->input_file);
-    return $model->objects->[$self->input_file_object_id];
+    my $object = $self->model_object;
+    if (!$object) {
+        my $model = Slic3r::Model->read_from_file($self->input_file);
+        $object = $model->objects->[$self->input_file_object_id];
+    }
+    return $object;
 }
 
 sub instances_count {
@@ -1165,61 +1176,6 @@ sub set_scale {
 		$self->thumbnail->align_to_origin;
     }
     $self->scale($scale);
-}
-
-package Slic3r::GUI::Plater::ObjectInfoDialog;
-use Wx qw(:dialog :id :misc :sizer :systemsettings);
-use Wx::Event qw(EVT_BUTTON EVT_TEXT_ENTER);
-use base 'Wx::Dialog';
-
-sub new {
-    my $class = shift;
-    my ($parent, %params) = @_;
-    my $self = $class->SUPER::new($parent, -1, "Object Info", wxDefaultPosition, wxDefaultSize);
-    $self->{object} = $params{object};
-
-    my $properties_box = Wx::StaticBox->new($self, -1, "Info", wxDefaultPosition, [400,200]);
-    my $grid_sizer = Wx::FlexGridSizer->new(3, 2, 10, 5);
-    $properties_box->SetSizer($grid_sizer);
-    $grid_sizer->SetFlexibleDirection(wxHORIZONTAL);
-    $grid_sizer->AddGrowableCol(1);
-    
-    my $label_font = Wx::SystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-    $label_font->SetPointSize(10);
-    
-    my $properties = $self->get_properties;
-    foreach my $property (@$properties) {
-    	my $label = Wx::StaticText->new($properties_box, -1, $property->[0] . ":");
-    	my $value = Wx::StaticText->new($properties_box, -1, $property->[1]);
-    	$label->SetFont($label_font);
-	    $grid_sizer->Add($label, 1, wxALIGN_BOTTOM);
-	    $grid_sizer->Add($value, 0);
-    }
-    
-    my $buttons = $self->CreateStdDialogButtonSizer(wxOK);
-    EVT_BUTTON($self, wxID_OK, sub { $self->EndModal(wxID_OK); });
-    
-    my $sizer = Wx::BoxSizer->new(wxVERTICAL);
-    $sizer->Add($properties_box, 0, wxEXPAND | wxTOP | wxLEFT | wxRIGHT, 10);
-    $sizer->Add($buttons, 0, wxEXPAND | wxBOTTOM | wxLEFT | wxRIGHT, 10);
-    
-    $self->SetSizer($sizer);
-    $sizer->SetSizeHints($self);
-    
-    return $self;
-}
-
-sub get_properties {
-	my $self = shift;
-	
-	return [
-		['Name'			=> $self->{object}->name],
-		['Size'			=> sprintf "%.2f x %.2f x %.2f", @{$self->{object}->size}],
-		['Facets'		=> $self->{object}->facets],
-		['Vertices'		=> $self->{object}->vertices],
-		['Materials' 	=> $self->{object}->materials],
-		['Two-Manifold' => $self->{object}->is_manifold ? 'Yes' : 'No'],
-	];
 }
 
 1;

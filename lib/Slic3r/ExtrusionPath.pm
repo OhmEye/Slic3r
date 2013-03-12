@@ -86,12 +86,26 @@ sub points {
     return $self->polyline;
 }
 
-sub endpoints {
+sub first_point {
     my $self = shift;
-    return ($self->points->[0], $self->points->[-1]);
+    return $self->polyline->[0];
 }
 
 sub is_printable { 1 }
+
+sub is_perimeter {
+    my $self = shift;
+    return $self->role == EXTR_ROLE_PERIMETER
+        || $self->role == EXTR_ROLE_EXTERNAL_PERIMETER
+        || $self->role == EXTR_ROLE_CONTOUR_INTERNAL_PERIMETER;
+}
+
+sub is_fill {
+    my $self = shift;
+    return $self->role == EXTR_ROLE_FILL
+        || $self->role == EXTR_ROLE_SOLIDFILL
+        || $self->role == EXTR_ROLE_TOPSOLIDFILL;
+}
 
 sub split_at_acute_angles {
     my $self = shift;
